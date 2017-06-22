@@ -65,13 +65,14 @@ open(J,"<$ssj" || die "can't open file $ssj: $!");
 while(my $l = <J>){
     chomp($l);
     my @tmp = split(/\t/,$l);
-    if($tmp[0] =~ /^[^\_]+\_(\d+)\_(\d+)\_[+|-]$/){
-	my $k = $1."_".$2; #key=coordinate_coordinate; value=counts;
-	$ssj{$k}=$tmp[1];
+#    if($tmp[0] =~ /^[^\_]+\_(\d+)\_(\d+)\_[+|-]$/){
+#	my $k = $1."_".$2; #key=coordinate_coordinate; value=counts;
+#	$ssj{$k}=$tmp[1];
+	$ssj{$tmp[0]}=$tmp[1];
 	$cSSJ=$cSSJ+1;
-    }else{
-	print STDERR "Problem reading ssj file $ssj\n";
-    }
+#    }else{
+#	print STDERR "Problem reading ssj file $ssj\n";
+#    }
 }
 close(J);
 print STDERR "$cSSJ input lines from $ssj\n"; 
@@ -85,11 +86,12 @@ open(C,"<$ssc" || die "can't open file $ssc: $!");
 while(my $l = <C>){
     chomp($l);
     my @tmp = split(/\t/,$l);
-    if($tmp[0] =~ /^[^\_]+\_(\d+)\_[+|-]$/){
+#    if($tmp[0] =~ /^[^\_]+\_(\d+)\_[+|-]$/){
 	#key=coordinate; value=counts;
-	$ssc{$1}=$tmp[1];
+#	$ssc{$1}=$tmp[1];
+	$ssc{$tmp[0]}=$tmp[1];
 	$cSSC=$cSSC+1;
-    }
+#    }
 }
 close(C);
 print STDERR "$cSSC input lines from $ssc\n"; 
@@ -103,7 +105,10 @@ open(A,"<$asta" || die "can't open file $asta: $!");
 while(my $line = <A>){
     chomp($line);
     my @tmp = split(/\t|\"/,$line);
-    
+    my $chr=$tmp[0];
+    my $l = @tmp;
+    my $id=$tmp[$l-2];
+
     #check if flanks are genomic sorted
     my $flank; 
     if(($tmp[3] =~ /^[0-9]+$/ ) and ($tmp[4] =~ /^[0-9]+$/ )){
@@ -143,41 +148,63 @@ while(my $line = <A>){
 	    my @tmpSC2 = split(/\^|\-|\[|\]/,$sc2); #s1 is $sc2[0] and s2 is $sc2[1] (from the 2nd transcripts)
 	    my @sc2;
 	    # second transcript(s)
-	    if(($strand eq "+") and ($tmpSC2[0] < $tmpSC2[1])){
+	    my $flag_compute_psi=0;
+	    if($tmpSC2[0] == $tmpSC2[1]){print STDERR "\n=====PROBLEM=====\nSplice chain from second transcript has two equal coordinates\n$line\n$sc2\n====\n\n"}
+	    elsif(($strand eq "+") and ($tmpSC2[0] < $tmpSC2[1])){
 		$sc2[0]=$tmpSC2[0];
 		$sc2[1]=$tmpSC2[1];
+		$flag_compute_psi=1;
 	    }elsif(($strand eq "-") and ($tmpSC2[1] < $tmpSC2[0])){
 		$sc2[0]=$tmpSC2[1];
 		$sc2[1]=$tmpSC2[0];
+		$flag_compute_psi=1;
 	    }else{
 		print STDERR "\n**********\nStrand $strand not available or it does not match the expected genomic position\n$line\n****\n";
 	    }
 	    
-	    my $a = 0;
-	    my $b = 0;
-	    my $c = 0; 
-	    if(defined $ssj{$f1."_".$sc2[0]}){
-		$a = $ssj{$f1."_".$sc2[0]};
-	    }
-	    if(defined $ssj{$sc2[1]."_".$f2}){
-		$b = $ssj{$sc2[1]."_".$f2};
-	    }
-	    if(defined $ssj{$flank}){
-		$c = $ssj{$flank}; 
-	    }
-	    
 	    my $psi;
+	    if($flag_compute_psi){
+		my $a = 0;
+		my $b = 0;
+		my $c = 0;
+		
+		if(defined $ssj{$chr."_".$f1."_".$sc2[0]."_".$strand}){
+		    $a = $ssj{$chr."_".$f1."_".$sc2[0]."_".$strand};
+		}
+		if(defined $ssj{$chr."_".$sc2[1]."_".$f2."_".$strand}){
+		    $b = $ssj{$chr."_".$sc2[1]."_".$f2."_".$strand};
+		}
+		if(defined $ssj{$chr."_".$flank."_".$strand}){
+		    $c = $ssj{$chr."_".$flank."_".$strand}; 
+		}
+		
+		
 	    
-	    if( ($a+$b+$c) > $threshold ){
-		$psi = (($a + $b)/($a + $b + 2*$c));	
-	    }
-	    else{
+		if( ($a+$b+$c) > $threshold ){
+		    $psi = (($a + $b)/($a + $b + 2*$c));	
+		}
+		else{
+		    $psi="NA";
+		}
+	    }else{
 		$psi="NA";
 	    }
 	    #print output
-	    print O $line."psi \"$psi\";\n";
+	    print O $line."psi \"";
+	    if($psi ne "NA"){
+		printf O ("%.4f", $psi);
+	    }else{
+		print O $psi;
+	    }
+	    print O "\";\n";
 	    if($verbose){
-		print "exon_skipping_single\t$structure\t$psi\n";
+		print "$id\texon_skipping_single\t$structure\t";
+		if($psi ne "NA"){
+		    printf("%.4f", $psi);
+		}else{
+		    print $psi;
+		}
+		print "\n";
 	    }
 	}else{
 	    print STDERR "Splice chain $splice_chain does not have the expected format $structure\n";
@@ -217,14 +244,14 @@ while(my $line = <A>){
 	    my $a = 0;
 	    my $b = 0;
 	    my $c = 0;
-	    if(defined $ssj{$sc2[0]."_".$sc2[1]}){
-		$a = $ssj{$sc2[0]."_".$sc2[1]};
+	    if(defined $ssj{$chr."_".$sc2[0]."_".$sc2[1]."_".$strand}){
+		$a = $ssj{$chr."_".$sc2[0]."_".$sc2[1]."_".$strand};
 	    }
-	    if(defined $ssc{$sc2[0]}){
-		$b = $ssc{$sc2[0]};
+	    if(defined $ssc{$chr."_".$sc2[0]."_".$strand}){
+		$b = $ssc{$chr."_".$sc2[0]."_".$strand};
 	    }
-	    if(defined $ssc{$sc2[1]}){
-		$c = $ssc{$sc2[1]};
+	    if(defined $ssc{$chr."_".$sc2[1]."_".$strand}){
+		$c = $ssc{$chr."_".$sc2[1]."_".$strand};
 	    }
 	    
 	    my $psi;
@@ -235,10 +262,22 @@ while(my $line = <A>){
 		$psi="NA";
 	    }
 	    #print output
-	    print O $line."psi \"$psi\";\n";
-	    
+	    print O $line."psi \"";
+	    if($psi ne "NA"){
+		printf O ("%.4f", $psi);
+	    }else{
+		print O $psi;
+	    }
+	    print O "\";\n";
+    
 	    if($verbose){
-		print "intron_retention\t$structure\t$psi\n";
+		print "$id\tintron_retention\t$structure\t";
+		if($psi ne "NA"){
+		    printf("%.4f", $psi);
+		}else{
+		    print $psi;
+		}
+		print "\n";
 	    }	
 	}else{
 	    print STDERR "Splice chain $splice_chain does not have the expected format $structure\n";
@@ -301,17 +340,17 @@ while(my $line = <A>){
 		my $d = 0;
 		my $a = 0;
 		my $b = 0;
-		if(defined $ssj{$f1."_".$sc1[0]}){
-		    $c = $ssj{$f1."_".$sc1[0]};
+		if(defined $ssj{$chr."_".$f1."_".$sc1[0]."_".$strand}){
+		    $c = $ssj{$chr."_".$f1."_".$sc1[0]."_".$strand};
 		}
-		if(defined $ssj{$sc1[1]."_".$f2}){
-		    $d = $ssj{$sc1[1]."_".$f2};
+		if(defined $ssj{$chr."_".$sc1[1]."_".$f2."_".$strand}){
+		    $d = $ssj{$chr."_".$sc1[1]."_".$f2."_".$strand};
 		}
-		if(defined $ssj{$f1."_".$sc2[0]}){
-		    $a = $ssj{$f1."_".$sc2[0]};
+		if(defined $ssj{$chr."_".$f1."_".$sc2[0]."_".$strand}){
+		    $a = $ssj{$chr."_".$f1."_".$sc2[0]."_".$strand};
 		}
-		if(defined $ssj{$sc2[1]."_".$f2}){
-		    $b = $ssj{$sc2[1]."_".$f2};
+		if(defined $ssj{$chr."_".$sc2[1]."_".$f2."_".$strand}){
+		    $b = $ssj{$chr."_".$sc2[1]."_".$f2."_".$strand};
 		}
 		
 		my $psi;
@@ -322,10 +361,22 @@ while(my $line = <A>){
 		    $psi="NA";
 		}
 		#print output
-		print O $line."psi \"$psi\";\n";
+		print O $line."psi \"";
+		if($psi ne "NA"){
+		    printf O ("%.4f", $psi);
+		}else{
+		    print O $psi;
+		}
+		print O "\";\n";
 		
 		if($verbose){
-		    print "mutually_exclusive\t$structure\t$psi\n";
+		    print "$id\tmutually_exclusive\t$structure\t";
+		    if($psi ne "NA"){
+			printf("%.4f", $psi);
+		    }else{
+			print $psi;
+		    }
+		    print "\n";
 		}
 	    }
 	}else{
@@ -359,11 +410,11 @@ while(my $line = <A>){
 	    
 	    my $a = 0;
 	    my $b = 0;
-	    if(defined $ssj{$sc1."_".$f2}){
-		$a = $ssj{$sc1."_".$f2};
+	    if(defined $ssj{$chr."_".$sc1."_".$f2."_".$strand}){
+		$a = $ssj{$chr."_".$sc1."_".$f2."_".$strand};
 	    }
-	    if(defined $ssj{$sc2."_".$f2}){
-		$b = $ssj{$sc2."_".$f2};
+	    if(defined $ssj{$chr."_".$sc2."_".$f2."_".$strand}){
+		$b = $ssj{$chr."_".$sc2."_".$f2."_".$strand};
 	    }
 	    
 	    my $psi;
@@ -374,10 +425,22 @@ while(my $line = <A>){
 		$psi="NA";
 	    }
 	    #print output
-	    print O $line."psi \"$psi\";\n";
+	    print O $line."psi \"";
+	    if($psi ne "NA"){
+		printf O ("%.4f", $psi);
+	    }else{
+		print O $psi;
+	    }
+	    print O "\";\n";
 	    
 	    if($verbose){
-		print "alternative_donor\t$structure\t$psi\n";
+		print "$id\talternative_donor\t$structure\t";
+		if($psi ne "NA"){
+		    printf("%.4f", $psi);
+		}else{
+		    print $psi;
+		}
+		print "\n";
 	    }	    
 	}
        
@@ -409,11 +472,11 @@ while(my $line = <A>){
 	    
 	    my $a = 0;
 	    my $b = 0;
-	    if(defined $ssj{$f1."_".$sc1}){
-		$a = $ssj{$f1."_".$sc1};
+	    if(defined $ssj{$chr."_".$f1."_".$sc1."_".$strand}){
+		$a = $ssj{$chr."_".$f1."_".$sc1."_".$strand};
 	    }
-	    if(defined $ssj{$f1."_".$sc2}){
-		$b = $ssj{$f1."_".$sc2};
+	    if(defined $ssj{$chr."_".$f1."_".$sc2."_".$strand}){
+		$b = $ssj{$chr."_".$f1."_".$sc2."_".$strand};
 	    }
 	    
 	    my $psi;
@@ -424,10 +487,22 @@ while(my $line = <A>){
 		$psi="NA";
 	    }
 	    #print output
-	    print O $line."psi \"$psi\";\n";
+	    print O $line."psi \"";
+	    if($psi ne "NA"){
+		printf O ("%.4f", $psi);
+	    }else{
+		print O $psi;
+	    }
+	    print O "\";\n";
 	    
 	    if($verbose){
-		print "alternative_acceptor\t$structure\t$psi\n";
+		print "$id\talternative_acceptor\t$structure\t";
+		if($psi ne "NA"){
+		    printf("%.4f", $psi);
+		}else{
+		    print $psi;
+		}
+		print "\n";
 	    }
 	}
 	
@@ -474,25 +549,25 @@ while(my $line = <A>){
 		my $sum = 0; #test for the threshold: a+b+..+n i.e. numeratorPSI + the last term only for denominator withou "(n-1)*"
 		
 		#first junction
-		if(defined $ssj{$f1."_".$sc2[0]}){
-		    $numeratorPSI = $ssj{$f1."_".$sc2[0]}; #first junction
+		if(defined $ssj{$chr."_".$f1."_".$sc2[0]."_".$strand}){
+		    $numeratorPSI = $ssj{$chr."_".$f1."_".$sc2[0]."_".$strand}; #first junction
 		}
 		
 		for(my $i=1; $i<($n-2); $i++){#interior juntions, numerator and denominator get the same values
-		    if(defined  $ssj{$sc2[$i]."_".$sc2[$i+1]}){
-			$numeratorPSI = $numeratorPSI + $ssj{$sc2[$i]."_".$sc2[$i+1]};
+		    if(defined  $ssj{$chr."_".$sc2[$i]."_".$sc2[$i+1]."_".$strand}){
+			$numeratorPSI = $numeratorPSI + $ssj{$chr."_".$sc2[$i]."_".$sc2[$i+1]."_".$strand};
 		    }
 		}
 		#last junction(s_n,f2)
-		if(defined $ssj{$sc2[$n-1]."_".$f2}){
-		    $numeratorPSI = $numeratorPSI + $ssj{$sc2[$n-1]."_".$f2};
+		if(defined $ssj{$chr."_".$sc2[$n-1]."_".$f2."_".$strand}){
+		    $numeratorPSI = $numeratorPSI + $ssj{$chr."_".$sc2[$n-1]."_".$f2."_".$strand};
 		}
 		#last term for the denominator only (n-1)*juntion(f1,f2)
 		$denominatorPSI = $numeratorPSI;
 		$sum = $numeratorPSI;
-		if(defined $ssj{$f1."_".$f2}){
-		    $denominatorPSI = $denominatorPSI + (($n-1)*($ssj{$f1."_".$f2}));
-		    $sum = $sum + $ssj{$f1."_".$f2};
+		if(defined $ssj{$chr."_".$f1."_".$f2."_".$strand}){
+		    $denominatorPSI = $denominatorPSI + (($n-1)*($ssj{$chr."_".$f1."_".$f2."_".$strand}));
+		    $sum = $sum + $ssj{$chr."_".$f1."_".$f2."_".$strand};
 		}
 		if($sum > $threshold){
 		    $psi = $numeratorPSI / $denominatorPSI; 
@@ -501,10 +576,22 @@ while(my $line = <A>){
 		}
 		
 		#print output
-		print O $line."psi \"$psi\";\n";
+		print O $line."psi \"";
+		if($psi ne "NA"){
+		    printf O ("%.4f", $psi);
+		}else{
+		    print O $psi;
+		}
+		print O "\";\n";
 		
 		if($verbose){
-		    print "exon_skipping_multi\t$structure\t$psi\n";
+		    print "$id\texon_skipping_multi\t$structure\t";
+		    if($psi ne "NA"){
+			printf("%.4f", $psi);
+		    }else{
+			print $psi;
+		    }
+		    print "\n";
 		}
 	    }
 	}

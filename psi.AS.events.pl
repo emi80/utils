@@ -45,7 +45,7 @@ sub usage {
     --verbose|v   : foreach event print type_of_event structure PSI
     --help
     
-  Exemple:
+  Example:
     perl $0 --asta astalavista.gtf --ssj sample.ssj.bed --ssc sample.ssc.bed
 
   Information on PSI calculation for the different AS events:
@@ -59,29 +59,45 @@ USAGE
 
 # ssj bed
 my %ssj;
+my $cSSJ=0;
+print STDERR "\nReading ssj input file: $ssj\n";
 open(J,"<$ssj" || die "can't open file $ssj: $!");
 while(my $l = <J>){
     chomp($l);
     my @tmp = split(/\t/,$l);
-    my $k = "$tmp[1]_$tmp[2]"; #key=coordinate_coordinate; value=counts;
-    $ssj{$k}=$tmp[6];
+    if($tmp[0] =~ /^[^\_]+\_(\d+)\_(\d+)\_[+|-]$/){
+	my $k = $1."_".$2; #key=coordinate_coordinate; value=counts;
+	$ssj{$k}=$tmp[1];
+	$cSSJ=$cSSJ+1;
+    }else{
+	print STDERR "Problem reading ssj file $ssj\n";
+    }
 }
 close(J);
+print STDERR "$cSSJ input lines from $ssj\n"; 
 
 
 # ssc bed
 my %ssc;
+my $cSSC=0;
+print STDERR "\nReading ssc input file: $ssc\n";
 open(C,"<$ssc" || die "can't open file $ssc: $!");
 while(my $l = <C>){
     chomp($l);
     my @tmp = split(/\t/,$l);
-    #key=coordinate; value=counts;
-    $ssc{$tmp[1]}=$tmp[6];
+    if($tmp[0] =~ /^[^\_]+\_(\d+)\_[+|-]$/){
+	#key=coordinate; value=counts;
+	$ssc{$1}=$tmp[1];
+	$cSSC=$cSSC+1;
+    }
 }
 close(C);
+print STDERR "$cSSC input lines from $ssc\n"; 
 
 
 # astalavista GTF
+print STDERR "\nReading asta input file: $asta\n";
+
 open(O,">$out"); #open output file
 open(A,"<$asta" || die "can't open file $asta: $!");
 while(my $line = <A>){

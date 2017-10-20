@@ -1,4 +1,4 @@
-#! /usr/bin/perl
+#! /usr/bin/env perl
 use strict; use warnings; 
 use Getopt::Long;
 
@@ -122,7 +122,6 @@ while(my $line = <A>){
 	$flank = "$tmp[3]_$tmp[4]";
 	print STDERR "Flanks $tmp[3]_$tmp[4] are not numeric\n";
     }
-
     my $strand = $tmp[6];
     my $structure = $tmp[15]; 
     my $splice_chain = $tmp[17]; 
@@ -457,28 +456,36 @@ while(my $line = <A>){
 	    my $tmp2 = $2; #splice_chain from 2nd transcript
 	    my $sc1;
 	    my $sc2;
-
-	    if(($strand eq "+") and ($tmp1 < $tmp2)){
+	    my $altAcc1;
+        my $altAcc2;
+	    
+        my ($f1,$f2) = split(/\_/,$flank); #flanking 1 and 2
+        
+        if(($strand eq "+") and ($tmp1 < $tmp2)){
 		$sc1=$tmp1;
 		$sc2=$tmp2;
-	    }elsif(($strand eq "-") and ($tmp1 > $tmp2)){
+	    $altAcc1 = $chr."_".$f1."_".$sc1."_".$strand;
+        $altAcc2 = $chr."_".$f1."_".$sc2."_".$strand;
+        }elsif(($strand eq "-") and ($tmp1 > $tmp2)){
 		$sc1=$tmp2;
 		$sc2=$tmp1;
+	    $altAcc1 = $chr."_".$sc1."_".$f2."_".$strand;
+        $altAcc2 = $chr."_".$sc2."_".$f2."_".$strand;
 	    }else{
 		print STDERR "\n**********\nStrand $strand not available or it does not match the expected genomic position\n$line\n****\n";
 	    }   
 	    
-	    my ($f1,$f2) = split(/\_/,$flank); #flanking 1 and 2
 	    
 	    my $a = 0;
 	    my $b = 0;
-	    if(defined $ssj{$chr."_".$f1."_".$sc1."_".$strand}){
-		$a = $ssj{$chr."_".$f1."_".$sc1."_".$strand};
+	   
+        if(defined $ssj{$altAcc1}){
+		$a = $ssj{$altAcc1};
+        }
+	    if(defined $ssj{$altAcc2}){
+		$b = $ssj{$altAcc2};
 	    }
-	    if(defined $ssj{$chr."_".$f1."_".$sc2."_".$strand}){
-		$b = $ssj{$chr."_".$f1."_".$sc2."_".$strand};
-	    }
-	    
+	   
 	    my $psi;
 	    
 	    if( ($a+$b) > $threshold ){
